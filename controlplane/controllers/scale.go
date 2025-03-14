@@ -133,6 +133,7 @@ func (r *CK8sControlPlaneReconciler) scaleDownControlPlane(
 	logger.Info(">>>>>>> scaleDownControlPlane: Removing machine from cluster.", "machine", machineToDelete)
 	if err := workloadCluster.RemoveMachineFromCluster(ctx, machineToDelete); err != nil {
 		logger.Error(err, "failed to remove machine from microcluster")
+		return ctrl.Result{}, fmt.Errorf("failed to remove machine from microcluster: %w", err)
 	}
 
 	logger.Info(">>>>>>> scaleDownControlPlane: Removing machine from CAPI.", "machine", machineToDelete)

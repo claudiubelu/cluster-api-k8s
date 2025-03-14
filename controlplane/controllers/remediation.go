@@ -187,6 +187,7 @@ func (r *CK8sControlPlaneReconciler) reconcileUnhealthyMachines(ctx context.Cont
 	log.Info(">>>>>>> reconcileUnhealthyMachines: Removing machine fromcluster.", "machine", machineToBeRemediated)
 	if err := workloadCluster.RemoveMachineFromCluster(ctx, machineToBeRemediated); err != nil {
 		log.Error(err, "failed to remove machine from microcluster")
+		return ctrl.Result{}, fmt.Errorf("failed to remove machine from microcluster: %w", err)
 	}
 
 	// Delete the machine

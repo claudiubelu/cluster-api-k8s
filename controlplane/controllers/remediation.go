@@ -81,6 +81,8 @@ func (r *CK8sControlPlaneReconciler) reconcileUnhealthyMachines(ctx context.Cont
 		return ctrl.Result{}, nil
 	}
 
+	log.Info(">>>>>>> reconcileUnhealthyMachines: Unhealthy machines.", "machines", unhealthyMachines)
+
 	// Select the machine to be remediated, which is the oldest machine marked as unhealthy not yet provisioned (if any)
 	// or the oldest machine marked as unhealthy.
 	//
@@ -89,8 +91,11 @@ func (r *CK8sControlPlaneReconciler) reconcileUnhealthyMachines(ctx context.Cont
 	// by considering which machine has lower impact on etcd quorum.
 	machineToBeRemediated := getMachineToBeRemediated(unhealthyMachines)
 
+	log.Info(">>>>>>> reconcileUnhealthyMachines: Selected Unhealthy machine to remediate.", "machine", machineToBeRemediated)
+
 	// Returns if the machine is in the process of being deleted.
 	if !machineToBeRemediated.ObjectMeta.DeletionTimestamp.IsZero() {
+		log.Info(">>>>>>> reconcileUnhealthyMachines: Selected Unhealthy machine is already being deleted.", "machine", machineToBeRemediated)
 		return ctrl.Result{}, nil
 	}
 
@@ -106,6 +111,7 @@ func (r *CK8sControlPlaneReconciler) reconcileUnhealthyMachines(ctx context.Cont
 
 	patchHelper, err := patch.NewHelper(machineToBeRemediated, r.Client)
 	if err != nil {
+		log.Info(">>>>>>> reconcileUnhealthyMachines: Could not get patchHelper for machine.", "machine", machineToBeRemediated, "error", err.Error())
 		return ctrl.Result{}, err
 	}
 
@@ -171,12 +177,14 @@ func (r *CK8sControlPlaneReconciler) reconcileUnhealthyMachines(ctx context.Cont
 
 	microclusterPort := controlPlane.KCP.Spec.CK8sConfigSpec.ControlPlaneConfig.GetMicroclusterPort()
 	clusterObjectKey := util.ObjectKey(controlPlane.Cluster)
+	log.Info(">>>>>>> reconcileUnhealthyMachines: Get workload cluster to remove machine.", "machine", machineToBeRemediated)
 	workloadCluster, err := r.managementCluster.GetWorkloadCluster(ctx, clusterObjectKey, microclusterPort)
 	if err != nil {
 		log.Error(err, "failed to create client to workload cluster")
 		return ctrl.Result{}, fmt.Errorf("failed to create client to workload cluster: %w", err)
 	}
 
+	log.Info(">>>>>>> reconcileUnhealthyMachines: Removing machine fromcluster.", "machine", machineToBeRemediated)
 	if err := workloadCluster.RemoveMachineFromCluster(ctx, machineToBeRemediated); err != nil {
 		log.Error(err, "failed to remove machine from microcluster")
 	}

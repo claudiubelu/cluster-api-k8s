@@ -152,21 +152,29 @@ type k8sdProxyOptions struct {
 
 // GetK8sdProxyForControlPlane returns a k8sd proxy client for the control plane.
 func (w *Workload) GetK8sdProxyForControlPlane(ctx context.Context, options k8sdProxyOptions) (*K8sdClient, error) {
+	logger := log.FromContext(ctx)
+	logger.Info(">>>>>>> GetK8sdProxyForControlPlane", "options", options)
 	cplaneNodes, err := w.getControlPlaneNodes(ctx)
 	if err != nil {
+		logger.Error(err, ">>>>>>> Error while getting control plane nodes.")
 		return nil, fmt.Errorf("failed to get control plane nodes: %w", err)
 	}
+	logger.Info(">>>>>>> Control plane nodes.", "nodes", cplaneNodes)
 
 	for _, node := range cplaneNodes.Items {
+		logger.Info(">>>>>>> Trying control plane node.", "node", node)
 		if _, ok := options.IgnoreNodes[node.Name]; ok {
+			logger.Info(">>>>>>> Ignoring control plane node.", "node", node)
 			continue
 		}
 
 		proxy, err := w.K8sdClientGenerator.forNode(ctx, &node) // #nosec G601
 		if err != nil {
+			logger.Info(">>>>>>> Error while getting K8sdClient for node.", "node", node, "error", err.Error())
 			continue
 		}
 
+		logger.Info(">>>>>>> Returning proxy.", "proxy", proxy)
 		return proxy, nil
 	}
 
@@ -416,10 +424,14 @@ func (w *Workload) requestJoinToken(ctx context.Context, name string, worker boo
 }
 
 func (w *Workload) RemoveMachineFromCluster(ctx context.Context, machine *clusterv1.Machine) error {
+	logger := log.FromContext(ctx)
+	logger.Info(">>>>>>> Removing machine from cluster.", "machine", machine)
 	if machine == nil {
+		logger.Info(">>>>>>> Why are you removing a nil machine?")
 		return fmt.Errorf("machine object is not set")
 	}
 	if machine.Status.NodeRef == nil {
+		logger.Info(">>>>>>> Not removing machine because it has no .Status.NodeRef.", "Status", machine.Status)
 		return fmt.Errorf("machine %s has no node reference", machine.Name)
 	}
 
@@ -430,12 +442,15 @@ func (w *Workload) RemoveMachineFromCluster(ctx context.Context, machine *cluste
 	// It *should* not be necessary as a machine should be able to remove itself from the cluster.
 	k8sdProxy, err := w.GetK8sdProxyForControlPlane(ctx, k8sdProxyOptions{IgnoreNodes: map[string]struct{}{nodeName: {}}})
 	if err != nil {
+		logger.Error(err, ">>>>>>> Could not get a k8sd proxy.")
 		return fmt.Errorf("failed to create k8sd proxy: %w", err)
 	}
 
 	header := w.newHeaderWithCAPIAuthToken()
 
+	logger.Info(">>>>>>> Sending request to k8sd.", "proxy", k8sdProxy, "method", http.MethodPost, "URI", fmt.Sprintf("%s/%s", apiv1.K8sdAPIVersion, apiv1.ClusterAPIRemoveNodeRPC), "header", header, "request", request)
 	if err := w.doK8sdRequest(ctx, k8sdProxy, http.MethodPost, fmt.Sprintf("%s/%s", apiv1.K8sdAPIVersion, apiv1.ClusterAPIRemoveNodeRPC), header, request, nil); err != nil {
+		logger.Error(err, ">>>>>>> Failed to remove node from cluster", "name", machine.Name)
 		return fmt.Errorf("failed to remove %s from cluster: %w", machine.Name, err)
 	}
 	return nil

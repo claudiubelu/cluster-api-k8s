@@ -101,12 +101,14 @@ func (r *CK8sControlPlaneReconciler) scaleDownControlPlane(
 	outdatedMachines collections.Machines,
 ) (ctrl.Result, error) {
 	logger := ctrl.LoggerFrom(ctx)
+	logger.Info(">>>>>>> scaleDownControlPlane: Removing one outdated machine.", "outdatedMachines", outdatedMachines)
 
 	// Pick the Machine that we should scale down.
 	machineToDelete, err := selectMachineForScaleDown(ctx, controlPlane, outdatedMachines)
 	if err != nil {
 		return ctrl.Result{}, fmt.Errorf("failed to select machine for scale down: %w", err)
 	}
+	logger.Info(">>>>>>> scaleDownControlPlane: Selected outdated machine.", "machine", machineToDelete)
 
 	// Run preflight checks ensuring the control plane is stable before proceeding with a scale up/scale down operation; if not, wait.
 	// Given that we're scaling down, we can exclude the machineToDelete from the preflight checks.
@@ -121,16 +123,19 @@ func (r *CK8sControlPlaneReconciler) scaleDownControlPlane(
 
 	microclusterPort := controlPlane.KCP.Spec.CK8sConfigSpec.ControlPlaneConfig.GetMicroclusterPort()
 	clusterObjectKey := util.ObjectKey(cluster)
+	logger.Info(">>>>>>> scaleDownControlPlane: Getting workload cluster to delete machine.", "machine", machineToDelete)
 	workloadCluster, err := r.managementCluster.GetWorkloadCluster(ctx, clusterObjectKey, microclusterPort)
 	if err != nil {
 		logger.Error(err, "failed to create client to workload cluster")
 		return ctrl.Result{}, fmt.Errorf("failed to create client to workload cluster: %w", err)
 	}
 
+	logger.Info(">>>>>>> scaleDownControlPlane: Removing machine from cluster.", "machine", machineToDelete)
 	if err := workloadCluster.RemoveMachineFromCluster(ctx, machineToDelete); err != nil {
 		logger.Error(err, "failed to remove machine from microcluster")
 	}
 
+	logger.Info(">>>>>>> scaleDownControlPlane: Removing machine from CAPI.", "machine", machineToDelete)
 	logger = logger.WithValues("machine", machineToDelete)
 	if err := r.Client.Delete(ctx, machineToDelete); err != nil && !apierrors.IsNotFound(err) {
 		logger.Error(err, "Failed to delete control plane machine")
